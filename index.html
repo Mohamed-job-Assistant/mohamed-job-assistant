@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#111827"><title>Mohamed Job Assistant</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f3f4f6;color:#111827;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}.app{max-width:760px;margin:auto;min-height:100vh;padding-bottom:30px}
+header{background:#111827;color:#fff;padding:24px 18px;border-radius:0 0 24px 24px}h1{margin:0;font-size:23px}.sub{opacity:.72;font-size:13px;margin-top:5px}
+main{padding:14px}.card{background:#fff;border-radius:18px;padding:16px;margin-bottom:12px;box-shadow:0 2px 10px #0000000b}h2{font-size:17px;margin:0 0 12px}
+label{font-size:12px;font-weight:700;color:#4b5563;display:block;margin:9px 0 5px}input,select{width:100%;padding:12px;border:1px solid #d1d5db;border-radius:12px;font:inherit;background:#fff}
+button{border:0;border-radius:12px;padding:12px 14px;font:inherit;font-weight:700;cursor:pointer}.primary{background:#111827;color:#fff;width:100%;margin-top:12px}
+.small{font-size:12px;color:#6b7280}.job{border:1px solid #e5e7eb;border-radius:14px;padding:13px;margin:9px 0}.job b{display:block}.job p{margin:5px 0;font-size:12px;color:#4b5563}.score{font-weight:800;font-size:20px}.pill{display:inline-block;padding:5px 9px;border-radius:999px;background:#e5e7eb;font-size:11px;font-weight:700}.good{background:#dcfce7;color:#166534}.warn{background:#fef3c7;color:#92400e}
+.actions{display:flex;gap:7px;margin-top:9px}.actions a,.actions button{flex:1;text-align:center;text-decoration:none;background:#111827;color:#fff;padding:9px;border-radius:10px;font-size:12px}.actions button{background:#e5e7eb;color:#111827}
+#loading{display:none;text-align:center;padding:15px}.empty{color:#6b7280;text-align:center;padding:15px}
+</style>
+</head><body><div class="app">
+<header><h1>Mohamed Job Assistant</h1><div class="sub">بحث وظائف الرياض + مطابقة الـCV</div></header>
+<main>
+<div class="card">
+<h2>🔎 البحث الذكي</h2>
+<label>المسار</label>
+<select id="track"><option value="procurement">Procurement / Purchasing / Sourcing</option><option value="fnb">F&B / Restaurant / Store Operations</option><option value="operations">Operations / Supply Chain</option></select>
+<label>المدينة</label><input id="city" value="Riyadh">
+<label>أقصى عدد نتائج</label><select id="limit"><option>10</option><option>20</option><option>30</option></select>
+<button class="primary" onclick="searchJobs()">🚀 ابحث عن الوظائف</button>
+<div id="loading">⏳ جاري البحث وتحليل النتائج...</div>
+</div>
+<div class="card"><h2>🎯 النتائج</h2><div id="results" class="empty">ابدأ البحث وستظهر الوظائف هنا.</div></div>
+</main></div>
+<script>
+const roles={procurement:["Procurement Specialist","Purchasing Specialist","Procurement Officer","Buyer","Purchasing Supervisor","Sourcing Specialist","Supply Chain Specialist"],fnb:["Restaurant Manager","Assistant Restaurant Manager","Restaurant Supervisor","Food and Beverage Supervisor","Store Manager","Assistant Store Manager"],operations:["Operations Supervisor","Operations Support","Supply Chain Supervisor","Operations Specialist","Inventory Supervisor"]};
+const profile={procurement:{cv:"Procurement CV",keys:["procurement","purchasing","buyer","sourcing","supplier","vendor","rfq","negotiation","incoterms","supply chain","import","export","logistics","customs","inventory","china"]},fnb:{cv:"F&B CV",keys:["restaurant","food and beverage","f&b","store manager","restaurant manager","restaurant supervisor","customer service","guest experience","haccp","food safety","food cost","staff training","team leadership","qsr","operations"]},operations:{cv:"Combined CV",keys:["operations","supply chain","procurement","inventory","vendor","supplier","cost control","logistics","quality","haccp","team leadership","store operations","sourcing","kpi"]}};
+function score(j,track){let p=profile[track],t=(j.title+" "+j.snippet).toLowerCase(),hits=p.keys.filter(k=>t.includes(k));let s=Math.min(99,Math.round(45+hits.length/p.keys.length*55));return {score:s,cv:p.cv,hits:hits.slice(0,8)}}
+async function searchJobs(){
+ let track=document.getElementById("track").value,city=document.getElementById("city").value,limit=+document.getElementById("limit").value;
+ document.getElementById("loading").style.display="block";document.getElementById("results").innerHTML="";
+ try{
+  let r=await fetch("/api/search",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({track,city,roles:roles[track],limit})});
+  let data=await r.json(); if(!r.ok) throw new Error(data.error||"Search failed");
+  let jobs=(data.jobs||[]).map(j=>({...j,...score(j,track)})).sort((a,b)=>b.score-a.score);
+  document.getElementById("results").innerHTML=jobs.length?jobs.map((j,i)=>`<div class="job"><b>${j.title}</b><p>${j.company||"Company not listed"} • ${j.location||city}</p><p class="score">${j.score}% <span class="pill ${j.score>=75?"good":"warn"}">${j.cv}</span></p><p>مطابقة: ${(j.hits||[]).join(" • ")||"مطابقة عامة"}</p><div class="actions"><a href="${j.link}" target="_blank" rel="noopener">عرض الوظيفة ↗</a><button onclick='save(${JSON.stringify(j).replace(/'/g,"&#39;")})'>💾 حفظ</button></div></div>`).join(""):"لم نجد نتائج مناسبة.";
+ }catch(e){document.getElementById("results").innerHTML=`<div class="empty">⚠️ ${e.message}<br><br>تأكد من إضافة SERPER_API_KEY في إعدادات Vercel.</div>`}
+ document.getElementById("loading").style.display="none";
+}
+function save(j){let a=JSON.parse(localStorage.getItem("savedJobs")||"[]");if(!a.some(x=>x.link===j.link)){a.unshift(j);localStorage.setItem("savedJobs",JSON.stringify(a));alert("تم الحفظ.");}else alert("هذه الوظيفة محفوظة مسبقًا.")}
+</script></body></html>
