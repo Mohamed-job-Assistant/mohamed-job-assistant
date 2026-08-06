@@ -31,7 +31,68 @@ button{border:0;border-radius:12px;padding:12px 14px;font:inherit;font-weight:70
 const roles={procurement:["Procurement Specialist","Purchasing Specialist","Procurement Officer","Buyer","Purchasing Supervisor","Sourcing Specialist","Supply Chain Specialist"],fnb:["Restaurant Manager","Assistant Restaurant Manager","Restaurant Supervisor","Food and Beverage Supervisor","Store Manager","Assistant Store Manager"],operations:["Operations Supervisor","Operations Support","Supply Chain Supervisor","Operations Specialist","Inventory Supervisor"]};
 const profile={procurement:{cv:"Procurement CV",keys:["procurement","purchasing","buyer","sourcing","supplier","vendor","rfq","negotiation","incoterms","supply chain","import","export","logistics","customs","inventory","china"]},fnb:{cv:"F&B CV",keys:["restaurant","food and beverage","f&b","store manager","restaurant manager","restaurant supervisor","customer service","guest experience","haccp","food safety","food cost","staff training","team leadership","qsr","operations"]},operations:{cv:"Combined CV",keys:["operations","supply chain","procurement","inventory","vendor","supplier","cost control","logistics","quality","haccp","team leadership","store operations","sourcing","kpi"]}};
 function score(j,track){let p=profile[track],t=(j.title+" "+j.snippet).toLowerCase(),hits=p.keys.filter(k=>t.includes(k));let s=Math.min(99,Math.round(45+hits.length/p.keys.length*55));return {score:s,cv:p.cv,hits:hits.slice(0,8)}}
-async function searchJobs(){
+async async function searchJobs(){
+ let track=document.getElementById("track").value;
+ let city=document.getElementById("city").value;
+ let limit=+document.getElementById("limit").value;
+
+ document.getElementById("loading").style.display="block";
+ document.getElementById("results").innerHTML="";
+
+ try{
+  let query=roles[track].join(" OR ");
+
+  let r=await fetch("/api/search",{
+   method:"POST",
+   headers:{"content-type":"application/json"},
+   body:JSON.stringify({
+    query:query,
+    location:city
+   })
+  });
+
+  let data=await r.json();
+
+  if(!r.ok) throw new Error(data.error||"Search failed");
+
+  let jobs=(data.results||[])
+   .slice(0,limit)
+   .map(j=>({
+    title:j.title,
+    company:j.source||"Company not listed",
+    location:city,
+    link:j.link,
+    snippet:j.snippet
+   }))
+   .map(j=>({...j,...score(j,track)}))
+   .sort((a,b)=>b.score-a.score);
+
+  document.getElementById("results").innerHTML=
+   jobs.length
+   ? jobs.map(j=>`
+    <div class="job">
+     <b>${j.title}</b>
+     <p>${j.company} • ${j.location}</p>
+     <p class="score">${j.score}%
+      <span class="pill ${j.score>=75?"good":"warn"}">${j.cv}</span>
+     </p>
+     <p>${j.snippet||""}</p>
+     <p>مطابقة: ${(j.hits||[]).join(" • ")||"مطابقة عامة"}</p>
+     <div class="actions">
+      <a href="${j.link}" target="_blank" rel="noopener">عرض الوظيفة ↗</a>
+      <button onclick='save(${JSON.stringify(j).replace(/'/g,"&#39;")})'>💾 حفظ</button>
+     </div>
+    </div>
+   `).join("")
+   :"لم نجد نتائج مناسبة.";
+
+ }catch(e){
+  document.getElementById("results").innerHTML=
+   `<div class="empty">⚠️ ${e.message}</div>`;
+ }
+
+ document.getElementById("loading").style.display="none";
+}
  let track=document.getElementById("track").value,city=document.getElementById("city").value,limit=+document.getElementById("limit").value;
  document.getElementById("loading").style.display="block";document.getElementById("results").innerHTML="";
  try{
